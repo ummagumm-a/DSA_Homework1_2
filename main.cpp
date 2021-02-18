@@ -4,10 +4,14 @@
  * Author - Sinii Viacheslav
  */
 
+/*
+ * test case:
+ * try to get element that is not in the table
+ * try to add receipts all with the same date/id/zero cost
+ */
+
 #include <iostream>
 #include <vector>
-#include <bitset>
-#include <memory>
 #include <optional>
 #include <iomanip>
 #include <exception>
@@ -26,15 +30,6 @@ namespace exceptions
         }
     };
 
-    // this exception is thrown in case if there are no elements in a requested range
-    class NoElementsInTheRange : public exception
-    {
-        virtual const char* what() const throw()
-        {
-            return "There are no elements in this range!";
-        }
-    };
-
     // this exception is thrown in case if a user tries to access elements in an empty list
     class NoElementsInTheListException : public exception
     {
@@ -43,17 +38,9 @@ namespace exceptions
             return "The list is empty, dummy!";
         }
     };
-
-    // this exception is thrown in case if a user tries to insert not the greatest element using addLast() method
-    class InvalidUseOfAddLastException : public exception
-    {
-        virtual const char* what() const throw()
-        {
-            return "Don't use addLast() with this element!";
-        }
-    };
 }
 
+// a list which contains only unique elements
 template <typename T>
 class UniqueItemsList
 {
@@ -69,7 +56,7 @@ private:
     Node* last = nullptr;
     unsigned int listSize = 0;
 public:
-    // default constructor for LinkedSortedList
+    // default constructor for UniqueItemsList()
     UniqueItemsList()
     {
         // make a fictitious first node
@@ -78,7 +65,7 @@ public:
         first = emptyNode;
     }
 
-    // add a new element to the List
+    // add a new (only unique) element to the List
     // O(n) - worst case
     void add(T item)
     {
@@ -96,12 +83,12 @@ public:
             return;
         }
 
-        // go through each node until we find the one that is greater than the item
+        // go through each node
         auto currentNode = first;
         while (currentNode->next != nullptr)
         {
             currentNode = currentNode->next;
-            // if similar element is already in the list - don't do anything
+            // if similar element is already in the list - don't do add the new one
             if (currentNode->data == item) return;
         }
 
@@ -110,6 +97,7 @@ public:
         *newNode = { item, currentNode->next };
         currentNode->next = newNode;
         last = newNode;
+        // increase the size of the list
         listSize++;
     }
 
@@ -149,115 +137,34 @@ private:
     }
 };
 
-//template <typename T>
-//class List
-//{
-//private:
-//    struct Node
-//    {
-//        T data;
-//        struct Node *next{};
-//    };
-//
-//    // pointers on the first(dummy) and the last (for faster access to the greatest element) elements
-//    Node* first = nullptr;
-//    Node* last = nullptr;
-//    unsigned int listSize = 0;
-//public:
-//    // default constructor for LinkedSortedList
-//    List()
-//    {
-//        // make a fictitious first node
-//        // we assume that value of this node is always less then the value of the first item
-//        auto emptyNode = new Node();
-//        first = emptyNode;
-//    }
-//
-//    // add a new element to the List
-//    // O(n) - worst case
-//    void add(T item)
-//    {
-//        // if the list is empty we simply insert the item
-//        if (listSize++ == 0) // increase the size of the list
-//        {
-//            // create new node
-//            auto newNode = new Node();
-//            newNode->data = item;
-//            newNode->next = nullptr;
-//            // update pointers
-//            first->next = newNode;
-//            last = newNode;
-//            return;
-//        }
-//
-//        // insert the item at the very end
-//        auto newNode = new Node();
-//        *newNode = { item, nullptr};
-//        last->next = newNode;
-//        last = newNode;
-//
-//    }
-//
-//    // return an element at index i
-//    // O(n) - worst case
-//    T get(int i)
-//    {
-//        // if the list is empty - there is nothing to return
-//        if (listSize == 0) throw exceptions::NoElementsInTheListException();
-//
-//        return getNode(i)->data;
-//    }
-//
-//    // this function returns the size of the list
-//    // O(1) - worst case
-//    int size()
-//    {
-//        return listSize;
-//    }
-//private:
-//    // get the node at index i
-//    // O(n) - worst case
-//    struct Node* getNode(int i)
-//    {
-//        i++;
-//        // raise an exception if i is invalid
-//        if (i < 0 || i >= listSize) throw exceptions::IndexOutOfBoundsException();
-//
-//        // go to i'th element
-//        auto *currentNode = first;
-//
-//        for (int j = 0; j < i; ++j) {
-//            currentNode = currentNode->next;
-//        }
-//
-//        return currentNode;
-//    }
-//};
-
+// abstract base class for all Maps
 template <typename keyType, typename valueType>
 class Map
 {
     virtual std::optional<valueType*> get(keyType key) = 0;
     virtual void put(keyType key, valueType value) = 0;
-    virtual int size() = 0;
 };
 
+// HashTable implementation of a Map
+// uses coalesced hashing
 template <typename keyType, typename valueType>
 class HashTable : Map<keyType, valueType>
 {
 private:
+    // struct which defines contents of each cell of the HashTable
     struct Item
     {
         keyType h_key;
-        bool empty = true;
         valueType data;
         Item* next = nullptr;
+        bool empty = true;
     };
 
     vector<Item*> table;
     int tableSize = 50000;
     int nElementsInTable = 0;
 public:
+    // default constructor for HastTable
     HashTable()
     {
         table.reserve(tableSize);
@@ -266,6 +173,7 @@ public:
         }
     }
 
+    // constructor which takes into account how many elements there will be in the table
     explicit HashTable(int n)
     {
         tableSize = n;
@@ -275,27 +183,36 @@ public:
         }
     }
 
+    // get the element with key 'key'
+    // if there is no such key in the table - indicate it with nullopt
+    // O(n) - worst case
     std::optional<valueType*> get(keyType key) {
+        // take an element at index corresponding to the hash value of key
         auto current = table[hashFunction(key)];
 
+        // go through each element until we find the one with the same key
         while (current->next != nullptr && current->h_key != key)
             current = current->next;
 
+        // if key is indeed the same - return the value
         if (current->h_key == key) return &current->data;
+        // if we just went to the end and didn't find the one with the same key -
+        // indicate it with nullopt
         else return {};
     };
 
+    // put an element to the table
+    // O(n) - worst case
     void put(keyType key, valueType value)
     {
+        // find an index for the element and place it there
         collisionHandler(key, value);
+        // increase the amount of items in the table
         nElementsInTable++;
     }
-
-    int size()
-    {
-        return nElementsInTable;
-    }
 public:
+    // my hash function
+    // O(1) - worst case
     int hashFunction(keyType key)
     {
         return compressionFunction(hashCode(key));
@@ -303,45 +220,57 @@ public:
 
     // this is the function for computing hash code of a key
     // it implements polynomial accumulation using Horner’s rule
+    // O(1) - worst case
     int hashCode(keyType key)
     {
         int code = 0;
         if (typeid( keyType ) == typeid( string ))
         {
+            // if the key is of type string
+            // then the chars in that string would be the coefficients in the polynomial
             for (int i = 0; i < key.length(); ++i) {
                 code = 7 * code + key[i];
             }
         }
 
+        // abs in case of overflow
         return abs(code);
     }
 
     // this is the compression function
     // it implements MAD
+    // O(1) - worst case
     int compressionFunction(int code)
     {
         return ((3 * code + 17) % 160009) % tableSize;
     }
 
     // coalesced hashing
+    // O(n) - worst case
     void collisionHandler(keyType key, valueType value)
     {
         int hf = hashFunction(key);
+        // if a cell is empty - simply insert new element there
         if (table[hf]->empty)
         {
             table[hf]->h_key = key;
             table[hf]->data = value;
             table[hf]->empty = false;
         }
-        else
+        else // if a cell is not empty
         {
             for (int i = tableSize - 1; i >= 0 ; --i)
             {
+                // find the first empty element starting from the end of the table
                 if (table[i]->empty)
                 {
+                    // insert the element there
                     table[i]->h_key = key;
                     table[i]->data = value;
                     table[i]->empty = false;
+
+                    // link this collided element to the ones with the same
+                    // result of hashFunction for its keys
                     auto current = table[hf];
 
                     while (current->next != nullptr)
@@ -356,6 +285,7 @@ public:
     }
 };
 
+// struct which defines contents of each receipt
 struct receipt
 {
     string date;
@@ -363,31 +293,28 @@ struct receipt
     string id;
     double cost;
     string item_title;
-
-    void show()
-    {
-        cout << "Date: " << date << endl;
-        cout << "Time: " << time << endl;
-        cout << "ID: " << id << endl;
-        cout << "cost: " << cost << endl;
-        cout << "Item Title: " << item_title << endl;
-    }
 };
 
-struct perDataInfo
+// struct which defines all relevant information for each date
+struct infoPerDate
 {
     UniqueItemsList<string>* uniqueIds;
     double totalCost;
+    vector<receipt> receipts;
 };
 
-struct Cafe
+// class which defines the work of cafe
+class Cafe
 {
 private:
+    // this list contains all unique dates in the input
     UniqueItemsList<string> dates;
-    HashTable<string, perDataInfo> receipts_by_dates;
+    HashTable<string, infoPerDate> receipts_by_dates;
 public:
+    // function which splits the order into the fields of receipt structure
     void takeOrder()
     {
+        // fill the receipt struct with the data from the input
         auto new_receipt = new receipt();
         cin >> new_receipt->date;
         dates.add(new_receipt->date);
@@ -401,28 +328,36 @@ public:
         getchar();
         getline(cin, new_receipt->item_title);
 
-//        new_receipt->show();
-
+        // add that receipt to the table
         addReceipt(new_receipt);
     }
 
+    // add new receipt to the table
+    // the key is the date
+    // the value is infoPerDate struct
     void addReceipt(const receipt* new_receipt)
     {
         auto res = receipts_by_dates.get(new_receipt->date);
-        if ( res )
+        if ( res ) // if the element with the same date is already in the table
         {
+            // update it's value
             (*res)->uniqueIds->add(new_receipt->id);
             (*res)->totalCost += new_receipt->cost;
+            (*res)->receipts.push_back(*new_receipt);
         }
-        else
+        else // if the element with this date hasn't been added to the table yet.
         {
+            // make a new infoPerDate struct for that date
             auto list = new UniqueItemsList<string>();
             list->add(new_receipt->id);
-            perDataInfo info = { list, new_receipt->cost };
+            infoPerDate info = { list, new_receipt->cost, { *new_receipt } };
+            // add it to the table
             receipts_by_dates.put(new_receipt->date, info);
         }
     }
 
+    // show the information about each date -
+    // number of unique id's and total cost of items
     void showDates()
     {
         for (int i = 0; i < dates.size(); ++i)
@@ -439,7 +374,7 @@ public:
 };
 
 int main() {
-    int n = 5;
+    int n;
     cin >> n;
     HashTable<string, int> hashTable(n);
 
@@ -449,11 +384,6 @@ int main() {
         cafe.takeOrder();
     }
     cafe.showDates();
-
-//    hashTable.put("a", new int(0));
-//    hashTable.put("b", new int(1));
-//    cout << *hashTable.get("b") << endl;
-//    cout << *hashTable.get("c") << endl;
 
 
     return 0;
